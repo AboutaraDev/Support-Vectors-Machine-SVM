@@ -1,0 +1,176 @@
+---
+title: "Support Vector Machines in R"
+author: "ABOUTARA-BELGHITI Marouane et OURRAD Nouhaila"
+date: "2023-11-13"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```
+Vous pouvez acquérir une compréhension approfondie du fonctionnement des SVM, puis les implémenter à l'aide de R avec un exemple concret.
+```
+
+## Support Vector Machines (SVM)
+
+Les SVM (Support Vector Machines) sont une classe d'algorithmes d'apprentissage automatique utilisés à la fois pour la classification et la régression. L'objectif principal des SVM est de trouver un hyperplan dans un espace de dimension élevée qui peut séparer de manière optimale les exemples de différentes classes.
+
+## Classificateur SVM linéaire
+
+Générons d'abord quelques données en 2 dimensions, et séparons-les un peu.après avoir défini `seed` aléatoire.nous faites une matrice `x`, distribuée avec **20** observations par La distribution normale en 2 classes sur 2 variables. Ensuite, nous créons une variable `y`, qui sera soit **-1**, soit **1**, avec 10 dans chaque classe. Pour `y = 1`, on déplace les moyennes de **0** à **1** dans chacune des coordonnées. Enfin, nous pouvons tracer les données et coder en couleur les points en fonction de leur réponse. Le caractère traçant 19 nous donne de jolis gros points visibles codés en bleu ou en rouge selon que la réponse est **1** ou **-1**.
+
+```{r first}
+set.seed(10111)
+x = matrix(rnorm(40), 20, 2)
+y = rep(c(-1, 1), c(10, 10))
+x[y == 1,] = x[y == 1,] + 1
+plot(x, col = y + 3, pch = 19)
+```
+
+• `set.seed()` définit une seed pour le générateur de nombres aléatoires afin d'assurer la reproductibilité.
+
+• `rnorm()` génère 40 nombres aléatoires à partir d'une distribution normale de moyenne 0 et d'écart type 1.
+
+• Ces nombres sont disposés dans une matrice de 20 lignes et 2 colonnes.
+
+• Les lignes sont sélectionnées à l'aide de l'expression logique `y == 1` et les valeurs de ces lignes sont augmentées de 1 à l'aide de l'opérateur **+**.
+• `col` définit la couleur des points en fonction des valeurs de y, **-1** étant bleu et **1** étant rouge.
+
+Maintenant on charge le package **e1071** qui contient la fonction svm
+
+```{r e}
+library(e1071)
+```
+
+Maintenant, nous créons une **dataframe** des données, transformant `y` en une variable factorielle. Après cela, nous appelons svm sur cette dataframe, en utilisant `y` comme variable de réponse et d'autres variables comme prédicteurs. Le dataframe aura décompressé la matrice `x` en 2 colonnes nommées `x1` et `x2`. nous disons à SVM que le **kernel** est linear, que le paramètre **cost** est 10 et que **scale** est égale à false.
+
+```{r svm}
+dat = data.frame(x, y = as.factor(y))
+svmfit = svm(y ~ ., data = dat, kernel = "linear", cost = 10, scale = FALSE)
+print(svmfit)
+```
+
+L'impression du `svmfit` donne son résumé. nous pouvons voir que le nombre de vecteurs de support(support vectors) est de **6**: ce sont les points proches de la frontière ou du mauvais côté de la frontière.
+
+Il existe une fonction de tracé pour SVM qui montre **decision boundary**, comme vous pouvez le voir ci-dessous. Il ne semble pas y avoir beaucoup de contrôle sur les couleurs. Il rompt avec les conventions puisqu’il met `x2` sur l’axe horizontal et `x1` sur l’axe vertical.
+
+```{r plotSvm}
+plot(svmfit, dat)
+```
+
+• Le plot montrera la limite de décision(decision boundary) du modèle SVM et les vecteurs de support.
+
+• `svmfit` est le résultat de l'ajustement d'un modèle SVM aux données `dat`.
+
+• `dat` contient les données utilisées pour ajuster le modèle SVM.
+
+La première chose à faire est de créer une grid de valeurs ou un lattice de valeurs pour `x1` et `x2` qui couvre tout le domaine sur un lattice assez fin. Pour ce faire, vous créez une fonction appelée `make.grid`. Il prend notre matrice de données x, ainsi qu'un argument n qui est le nombre de points dans chaque direction.
+
+Dans cette fonction, nous utilisons la fonction `apply` pour obtenir la plage de chacune des variables dans x. Ensuite, pour x1 et x2, nous utilisons la fonction `seq` pour passer de la valeur la plus basse à la valeur supérieure afin de créer une grid de longueur n. À partir de maintenant, nous avons `x1` et `x2`, chacun avec une longueur de 75 valeurs uniformément espacées sur chacune des coordonnées. Enfin, nous utilisons la fonction `expand.grid`, qui prend `x1` et `x2` et crée le lattice.
+
+```{r grid}
+make.grid = function(x, n = 75) {
+  grange = apply(x, 2, range)
+  x1 = seq(from = grange[1,1], to = grange[2,1], length = n)
+  x2 = seq(from = grange[1,2], to = grange[2,2], length = n)
+  expand.grid(X1 = x1, X2 = x2)
+}
+```
+
+• `apply` pour trouver la plage(range) de chaque colonne de la matrice x.
+
+• `range` renvoie les valeurs minimales et maximales d'un vecteur.
+
+• `grange` est une matrice à deux lignes et deux colonnes.
+
+Nous pouvons maintenant appliquer la fonction make.grid sur x.Premières valeurs du lattice de 1 à 10.
+
+```{r xgrid}
+xgrid = make.grid(x)
+xgrid[1:10,]
+```
+
+Après avoir réalisé le lattice, nous allons faire une prédiction en chaque point du lattice Avec le nouveau data `xgrid`, nous utilisons `predict` et appelons la réponse `ygrid`. nous traçons ensuite et codons en couleur les points en fonction de la classification afin que la limite de décision(decision boundary) soit claire. Mettons également les points d'origine sur ce tracé en utilisant la fonction `points`.
+
+`svmfit` a un composant appelé `index` qui indique quels sont les points d'appui. nous les incluons dans le plot en utilisant à nouveau la fonction `points`.
+
+```{r predict}
+ygrid = predict(svmfit, xgrid)
+plot(xgrid, col = c("red","blue")[as.numeric(ygrid)], pch = 20, cex = .2)
+points(x, col = y + 3, pch = 19)
+points(x[svmfit$index,], pch = 5, cex = 2)
+```
+
+Comme vous pouvez le voir sur le graphique, les points dans les cases sont proches de la limite de décision(decision boundary) et jouent un rôle déterminant dans la détermination de cette limite.
+
+## Non-Linear SVM Classifier
+Lien pour télécharger le fichier **ESL.mixture.rda** :  
+<http:http://www-stat.stanford.edu/~tibs/ElemStatLearn/datasets/ESL.mixture.rda>
+```{r load}
+load(file = "ESL.mixture.rda")
+names(ESL.mixture)
+```
+
+• Un fichier *.rda* est un format de fichier utilisé dans le logiciel R pour sauvegarder des objets R.
+
+• La première ligne de code charge un fichier de données nommé "**ESL.mixture.rda**".
+
+•`load()` est utilisée pour charger des objets R enregistrés à partir d'un fichier.
+
+• `names()` permet d'extraire ou d'afficher les noms des variables dans un objet R.
+
+```{r remove}
+rm(x, y)
+attach(ESL.mixture)
+```
+
+• Il attache un data frame  ESL.mixture au chemin de recherche à l'aide de la fonction `attach()`.
+
+• Cela permet à l'utilisateur de faire référence aux variables dans **ESL.mixture** directement par leur nom, sans avoir à spécifier dataframe à chaque fois.
+
+```{r plotting}
+plot(x, col = y + 1)
+```
+
+Les données semblent se chevaucher un peu, mais vous pouvez voir qu'il y a quelque chose de spécial dans leur structure. Maintenant, créons une data frame avec la réponse y et transformons-la en facteur. Après cela, vous pouvez installer un SVM avec un kernel radial et coût 5.
+
+```{r fit}
+dat = data.frame(y = factor(y), x)
+fit = svm(factor(y) ~ ., data = dat, scale = FALSE, kernel = "radial", cost = 5)
+```
+
+Il est temps de créer une grid et de faire nos prédictions. Ces données étaient en fait fournies avec des points de grid Si vous regardez le résumé des noms qui figuraient sur la liste, il y a 2 variables `px1` et `px2`, qui sont la grid de valeurs pour chacune de ces variables. Nous pouvons utiliser `expand.grid` pour créer la grid de valeurs. Ensuite, nous prédisons la classification pour chacune des valeurs de la grid.
+
+```{r pre}
+xgrid = expand.grid(X1 = px1, X2 = px2)
+ygrid = predict(fit, xgrid)
+```
+
+• La première ligne crée un data  frame appelé `xgrid` à l'aide de la fonction `expand.grid()`.
+
+• Cette fonction prend deux vecteurs (`px1` et `px2`) comme entrées et renvoie une data frame avec toutes les combinaisons possibles des valeurs de ces vecteurs.
+
+• `prédire()` pour générer des valeurs prédites pour chaque ligne de `xgrid`.
+
+Enfin, nous traçons les points et les colorons en fonction de la limite de décisio (**decesion boundary**). Vous pouvez voir que **decesion boundary** n’est pas linéaire. Vous pouvez également placer les points de données dans le plot pour voir où ils se trouvent.
+
+```{r fin}
+plot(xgrid, col = as.numeric(ygrid), pch = 20, cex = .2)
+points(x, col = y + 1, pch = 19)
+```
+
+• L'argument pch définit la forme des points comme étant un cercle rempli d'une taille de 0,2 (`cex`).
+
+
+# Conclusion
+
+Pour récapituler, **Support Vector Machines** sont une sous-classe de classificateurs supervisés qui tentent de partitionner un espace de fonctionnalités en deux groupes ou plus. Ils y parviennent en trouvant un moyen optimal de séparer ces groupes en fonction de leurs étiquettes de classe connues :
+
+Dans des cas plus simples, la « boundary » de séparation est linéaire, conduisant à des groupes divisés par des lignes (ou des plans) dans des espaces de grande dimension.
+Dans les cas plus compliqués (où les groupes ne sont pas bien séparés par des lignes ou des plans), SVM est capable d'effectuer un partitionnement non linéaire. Ceci est réalisé au moyen d’une fonction `kernel`.
+En fin de compte, cela en fait des classificateurs très sophistiqués et performants, mais au prix habituel, ils peuvent être sujets au surapprentissage(**overfitting**).
+
+# ---------------------Merci pour votre attention-----------------------
+
